@@ -1,0 +1,269 @@
+#include <iostream>
+#include <time.h>
+#include <SDL.h>
+
+#include <lodepng.h>
+
+#include "render.h"
+#include "SDLHelper.h"
+#include "FreeTypeHelper.h"
+#include "vanilla.h"
+
+int thickness = 1;
+
+
+void encodeOneStep(const char* filename, std::vector<unsigned char>& image, unsigned width, unsigned height) {
+  //Encode the image
+  unsigned error = lodepng::encode(filename, image, width, height);
+
+  //if there's an error, display it
+  if(error) std::cout << "encoder error " << error << ": "<< lodepng_error_text(error) << std::endl;
+}
+
+void renderGrass(int strands, glm::vec2* seed, int baseX, int baseY, bool lines )
+{
+        float dimen = 1;
+        int increment = 1;
+        float now = SDL_GetTicks()/1000.0f;
+        bool write = KeyManager::getJustPressed() == SDLK_F6; //whether or not to write to file
+        std::vector<unsigned char> image;
+        glm::vec2 screenDimen = RenderProgram::getScreenDimen();
+        if (write)
+        {
+            image.resize(4*screenDimen.x*screenDimen.y);
+        }
+        for (int j =0; j < strands; ++j)
+        {
+            int length = seed[j].y;
+            float customTilt = cos(now - seed[j].x);
+            if (lines)
+            {
+                float angle = cos(now - seed[j].x)/10 - M_PI/2;
+                glm::vec2 dist = {baseX + cos(angle)*length, baseY + sin(angle)*length};
+                glm::vec2 old = {baseX,baseY};
+                for (int i = 0; i < length; i += increment)
+                {
+
+                    float x = baseX + i*.25*(customTilt)*pow(3,i/(float)length);
+                    float y = baseY - dimen*i;
+                    glm::vec4 color = glm::vec4(0,1.0f/length*i,.3,1);
+
+                    PolyRender::requestLine(glm::vec4(old,x,y),color,1,thickness);
+                    old ={x,y};
+                }
+            }
+            else
+            {
+                for (int i=0; i < length; i += increment)
+                {
+
+                    float x = floor(baseX + i*.25*(customTilt)*pow(3,i/(float)length));
+                    float y = floor(baseY - dimen*i);
+                    glm::vec4 color = glm::vec4(0,1.0f/length*i,.3,1);
+                    for(int  k = 0; k < thickness ; ++k)
+                    {
+                    PolyRender::requestRect({x +dimen*k ,
+                                                                                  y,
+                                                                                  dimen,
+                                                                                  dimen},
+                                            color,true,0,1);
+                        if (write)
+                        {
+                            image[4*(y*screenDimen.x + (x + dimen*k))] = color.r*255;
+                            image[4*(y*screenDimen.x + (x + dimen*k))+1] = color.g*255;
+                            image[4*(y*screenDimen.x + (x + dimen*k))+2] = color.b*255;
+                            image[4*(y*screenDimen.x + (x + dimen*k))+3] = color.a*255;
+                           //std::cout << "INDEX: " << (y*screenDimen.x + x) <<"\n";
+                        }
+                    }
+                }
+            }
+        }
+        if (write)
+        {
+           // std::cout << image.size() << "\n";
+            encodeOneStep("grass.png",image,screenDimen.x,screenDimen.y);
+        }
+       // std::cout << SDL_GetTicks() -  now *1000<<"\n";
+}
+
+struct ChainLink
+{
+    constexpr static float dimen = 30; //default dimensions of our links
+    glm::vec4 rect;
+    glm::vec2 origin;
+    glm::vec2 force = {0,0};
+    glm::vec2 oldMouse = {0,0};
+    ChainLink* up = 0, *down = 0;
+    ChainLink(const glm::vec4& rect_, ChainLink* up_, ChainLink* down_) : rect(rect_), origin(rect_.x,rect_.y)
+    {
+        setLink(up_,up);
+        setLink(down_,down);
+    }
+    void setLink(ChainLink* link, bool doUp) //sets either up or down. doUp is whether or not to set the up link or the down link
+    {
+        if (link)
+        {
+            if (doUp)
+            {
+                up = link;
+                link->down = this;
+            }
+            else
+            {
+                down = link;
+                link->up = this;
+            }
+        }
+    }
+    void addForce(const glm::vec2& f)
+    {
+        force += f;
+        if (glm::length(force) > 10)
+        {
+            force = glm::normalize(force)*10.0f;
+        }
+    }
+    void propagate(const glm::vec2& f, bool goUp)
+    {
+        ChainLink* next = goUp ? up : down;
+        if (next)
+        {
+            next->addForce(f);
+            next->propagate(f,goUp);
+        }
+    }
+    void update()
+    {
+        float angle = 0;
+        glm::vec2 mousePos = pairtoVec(MouseManager::getMousePos());
+        if (pointInVec(rect,mousePos,angle))
+        {
+            addForce(10.0f*(mousePos - oldMouse));
+        }
+        oldMouse = mousePos;
+        if (down && (force.x != 0 || force.y != 0))
+        {
+            glm::vec2 rectPoint= {rect.x + rect.z/2,rect.y + rect.a/2};
+            glm::vec2 downPoint = down ? glm::vec2(down->rect.x + down->rect.z/2, down->rect.y + down->rect.a/2) : rectPoint;
+            glm::vec2 upPoint = up ? glm::vec2(up->rect.x + up->rect.z/2, up->rect.y + up->rect.a/2) : rectPoint;
+            //force = downPoint - rectPoint + force; //anchor the link down with the previous one
+            //force = glm::normalize(force); //make sure force magnitude is no bigger than the distance between the centers of our rects, to make sure we don't go too far
+            //std::cout << force.x << " " << force.y << "\n";
+
+            float mag = glm::length(force);//a == 0 ? 1 : sin(d)*ChainLink::dimen/sin(a);
+            //std::cout << mag << "\n";
+            glm::vec2 finalForce = .3f*(mag*(glm::normalize(force)) + downPoint - rectPoint + upPoint - rectPoint);
+            rect.x += finalForce.x;
+            //std::cout << finalForce.x << "\n";
+            //rect.y += finalForce.y;
+            propagate(.01f*force,true);
+            propagate(.01f*force,false);
+            force = (1.0f - .05f)*force;
+            force.x = abs(force.x) < .00001f ? 0 : force.x;
+            force.y = abs(force.y) < .00001f ? 0 : force.y;
+            //std::cout <<force.x << " " << force.y <<"\n";
+        }
+            //force += .01f*(origin - glm::vec2(rect.x,rect.y));
+        //std::cout << glm::length(force) << " " << force.x << " " << force.y<< "\n";
+        //printRect(rect);
+        PolyRender::requestRect(rect,{0,1,0,1},false,angle,1);
+        //Font::tnr.requestWrite({convert(glm::length(force)),rect});
+    }
+};
+
+struct Chain //linked-list-esque structure that updates an entire chain
+{
+    ChainLink bottom;
+    Chain(glm::vec2 start, int length) : bottom(glm::vec4(start,ChainLink::dimen,ChainLink::dimen),nullptr,nullptr)//center of the our bottom-most link and length of chain
+    {
+        ChainLink* current = &bottom;
+        ChainLink* next = nullptr;
+        for (int i = 1; i < length; ++i)
+        {
+            next = (new ChainLink({start.x,start.y - ChainLink::dimen*i, ChainLink::dimen,ChainLink::dimen},nullptr,current));
+            current->setLink(next,true);
+            current = next;
+        }
+        //bottom.addForce({0,10});
+    }
+    void process()
+    {
+        ChainLink* current = &bottom;
+        while (current != nullptr)
+        {
+            current->update();
+            current = current->up;
+        }
+    }
+};
+
+int main(int args, char* argsc[])
+{
+    const int screenWidth = 640;
+    const int screenHeight = 640;
+    srand(time(NULL));
+    SDL_Init(SDL_INIT_VIDEO);
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS,1);
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES,8);
+    SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
+
+    SDL_Window* window = SDL_CreateWindow("Project",SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,screenWidth, screenHeight, SDL_WINDOW_OPENGL);
+
+//SDL_SetHint( SDL_HINT_RENDER_SCALE_QUALITY, "1" );
+
+    SDL_StopTextInput();
+    SDL_GL_CreateContext(window);
+
+    RenderProgram::init(screenWidth,screenHeight);
+
+      //  glEnable(GL_MULTISAMPLE);
+//
+
+    //glDisable(GL_DEPTH_TEST);
+
+    Font::init(screenWidth, screenHeight);
+    PolyRender::init(screenWidth,screenHeight);
+    SDL_Event e;
+    bool quit = false;
+    glClearColor(1,1,1,1);
+    bool eventsEmpty = true;
+    float size = .5;
+
+    Chain chain({screenWidth/2,screenHeight/2},10);
+
+    while (!quit)
+    {
+        while (SDL_PollEvent(&e))
+        {
+            eventsEmpty = false;
+            KeyManager::getKeys(e);
+            MouseManager::update(e);
+            if (e.type == SDL_QUIT)
+            {
+                quit = true;
+            }
+        }
+        if (eventsEmpty)
+        {
+            KeyManager::getKeys(e);
+            MouseManager::update(e);
+        }
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        chain.process();
+
+        //PolyRender::requestRect({100,100,100,100},{0,1,0,1},false,M_PI/4,1);
+
+        SpriteManager::render();
+        PolyRender::render();
+       // Font::alef.write(Font::wordProgram,"asdf",320,320,0,1,{0,0,0});
+        SDL_GL_SwapWindow(window);
+        DeltaTime::update();
+        eventsEmpty = true;
+       // Font::tnr.requestWrite({convert(DeltaTime::deltaTime),{0,0,100,100},0,{0,0,0,1},1});
+
+        //std::cout << DeltaTime::deltaTime << std::endl;
+    }
+    return 0;
+}
