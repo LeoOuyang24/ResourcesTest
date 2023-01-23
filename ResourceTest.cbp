@@ -46,9 +46,6 @@
 			<Add directory="../../glm/glm" />
 			<Add directory="../../freetype-2.9.1/include" />
 			<Add directory="../../resources" />
-			<Add directory="../../dirent-1.23.2/include" />
-			<Add directory="../../opencv/build/include/opencv2" />
-			<Add directory="../../LodePNG/lodepng" />
 		</Compiler>
 		<Linker>
 			<Add option="-lmingw32 -lSDL2main -lSDL2 -lopengl32" />
@@ -71,8 +68,6 @@
 		<Unit filename="../../resources/geometry.h" />
 		<Unit filename="../../resources/glGame.cpp" />
 		<Unit filename="../../resources/glGame.h" />
-		<Unit filename="../../resources/glInterface.cpp" />
-		<Unit filename="../../resources/glInterface.h" />
 		<Unit filename="../../resources/physics.cpp" />
 		<Unit filename="../../resources/physics.h" />
 		<Unit filename="../../resources/render.cpp" />
@@ -89,7 +84,11 @@
 		<Unit filename="../../resources/stb_image.h" />
 		<Unit filename="../../resources/vanilla.cpp" />
 		<Unit filename="../../resources/vanilla.h" />
+		<Unit filename="bacteria.h" />
 		<Unit filename="main.cpp" />
+		<Unit filename="projects/terrain.h" />
+		<Unit filename="retired/bacteria.h" />
+		<Unit filename="spatialGrid.h" />
 		<Extensions>
 			<lib_finder disable_auto="1" />
 		</Extensions>
