@@ -3,13 +3,11 @@
 #include <SDL.h>
 
 #include "vanilla.h"
+#include "geometry.h"
 #include "render.h"
 #include "FreeTypeHelper.h"
 #include "SDLHelper.h"
 #include "components.h"
-
-#include "bacteria.h"
-
 
 int main(int args, char* argsc[])
 {
@@ -21,14 +19,15 @@ int main(int args, char* argsc[])
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES,8);
     SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
 
-    SDL_Window* window = SDL_CreateWindow("Project",SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,screenWidth, screenHeight, SDL_WINDOW_OPENGL);
+    GLContext::init(screenWidth,screenHeight);
 
 //SDL_SetHint( SDL_HINT_RENDER_SCALE_QUALITY, "1" );
 
-    SDL_StopTextInput();
-    SDL_GL_CreateContext(window);
+    glEnable(GL_MULTISAMPLE);
 
-    RenderProgram::init(screenWidth,screenHeight);
+    SDL_StopTextInput();
+    ViewPort::init(screenWidth,screenHeight);
+    //RenderProgram::init(screenWidth,screenHeight);
 
       //  glEnable(GL_MULTISAMPLE);
 //
@@ -36,41 +35,36 @@ int main(int args, char* argsc[])
     //glDisable(GL_DEPTH_TEST);
 
     Font::init(screenWidth, screenHeight);
-    PolyRender::init(screenWidth,screenHeight);
+    PolyRender::init(screenWidth,screenHeight); //rect, angle, z, effect
+
     SDL_Event e;
     bool quit = false;
-    glClearColor(0,.5,1,1);
+    glClearColor(1,1,1,1);
     bool eventsEmpty = true;
 
-   // ReusableVector<int> rVec;
-    DeltaTime alarm;
-    alarm.set();
+    glm::vec2 a = {100,100};
+    glm::vec2 b = {200,200};
+    glm::vec2 c = {400,100};
+    glm::vec2 d = {100,500};
 
-    int amount = 10000;
+    int dimen = 1;
+    int instances = screenWidth*screenHeight/dimen/dimen;
 
-    EntityPosManager manager;
-    manager.init({0,0,screenWidth,screenHeight});
-
-    for (int i = 0; i < amount; ++i)
-    {
-        manager.addEntity(*(bacteriaAssemble()));
-    }
-
-    std::vector<Entity*> entities;
-    BiTree tree({0,0,screenWidth,screenHeight});
-    for (int i =0; i < amount; ++i)
-    {
-        auto bacteria = bacteriaAssemble();
-        entities.push_back(bacteria);
-        tree.insert(*bacteria->getComponent<RectComponent>());
-    }
-
+    Font alef("projects/alef.ttf");
+    BaseAnimation anime("turtFrog.png",1,5,2, {0,0,4,1});
+    Entity entity;
+    BaseAnimationComponent comp(entity,anime);
+    //glDepthMask(GL_FALSE);
+    //swarm.addBoid(fish);
+    //glEnable(GL_DEPTH_TEST);
+    //SDL_GL_SetSwapInterval(0);
+    glm::vec2 score = {0,0};
     while (!quit)
     {
         while (SDL_PollEvent(&e))
         {
             eventsEmpty = false;
-            KeyManager::getKeys(e);
+            KeyManager::update(e);
             MouseManager::update(e);
             if (e.type == SDL_QUIT)
             {
@@ -79,36 +73,30 @@ int main(int args, char* argsc[])
         }
         if (eventsEmpty)
         {
-            KeyManager::getKeys(e);
+            KeyManager::update(e);
             MouseManager::update(e);
         }
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        //std::cout << "Collisions: " << accum << "\n";
-        //manager.update();
-        //manager.getQuadTree()->render({0,0});
 
-        tree.map([](Positional& p){
-                 RectComponent* comp = static_cast<RectComponent*>(&p);
-                 comp->getEntity().update();
-                 tree.remove(p);
-                 tree.insert(p);
-                 PolyRender::requestRect(comp->getRect(),{0,0,0,1},true,0,0);
-                 });
-        tree.processCollisions([](RectPositional& r1, RectPositional& r2){
-                               PolyRender::requestRect(r1.getRect(),{1,0,0,1},true,0,1);
-                               PolyRender::requestRect(r2.getRect(),{0,1,0,1},true,0,1);
-                               });
+        comp.request(ViewPort::animeProgram,{{0,0,64,64},0});
+        //sprite.draw(RenderProgram::basicProgram,data,instances);
+        PolyRender::requestRect({1,0,64,64},{1,0,0,1},true,0,1);
+                //Font::tnr.requestWrite({convert(DeltaTime::deltaTime),{0,0,100,100},0,{0,0,0,1},1});
+        //SpriteManager::request(transFish,betterProgram,glm::vec4(200,300,100,100));
 
         PolyRender::render();
-        SpriteManager::render();
-       // Font::alef.write(Font::wordProgram,"asdf",320,320,0,1,{0,0,0});
-        SDL_GL_SwapWindow(window);
-        DeltaTime::update();
-        eventsEmpty = true;
-        Font::tnr.requestWrite({convert(DeltaTime::deltaTime),{0,0,100,100},0,{0,0,0,1},1});
 
-        //std::cout << DeltaTime::deltaTime << std::endl;
+        SpriteManager::render();
+
+        GLContext::update();
+        DeltaTime::update();
+        //
+
+        eventsEmpty = true;
+
+
+        //std::cout << DeltaTime::deltaTime << "\n";
     }
     return 0;
 }

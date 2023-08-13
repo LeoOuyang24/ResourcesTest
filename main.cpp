@@ -7,6 +7,7 @@
 #include "render.h"
 #include "FreeTypeHelper.h"
 #include "SDLHelper.h"
+#include "components.h"
 
 int main(int args, char* argsc[])
 {
@@ -18,13 +19,13 @@ int main(int args, char* argsc[])
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES,8);
     SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
 
-    SDL_Window* window = SDL_CreateWindow("Project",SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screenWidth, screenHeight, SDL_WINDOW_OPENGL);
+    GLContext::init(screenWidth,screenHeight);
 
 //SDL_SetHint( SDL_HINT_RENDER_SCALE_QUALITY, "1" );
 
-    SDL_StopTextInput();
-    SDL_GL_CreateContext(window);
+    glEnable(GL_MULTISAMPLE);
 
+    SDL_StopTextInput();
     ViewPort::init(screenWidth,screenHeight);
     //RenderProgram::init(screenWidth,screenHeight);
 
@@ -34,41 +35,32 @@ int main(int args, char* argsc[])
     //glDisable(GL_DEPTH_TEST);
 
     Font::init(screenWidth, screenHeight);
-    PolyRender::init(screenWidth,screenHeight);
-
-    RenderProgram basicProgram;
-    basicProgram.init("../../resources/shaders/vertex/vertexShader.h","../../resources/shaders/fragment/fragmentShader.h",18,{16,1,1});
-    Uint32 now = SDL_GetTicks();
-    RenderProgram betterProgram;
-    betterProgram.init("../../resources/shaders/vertex/betterShader.h","../../resources/shaders/fragment/fragmentShader.h",7,{4,1,1,1}); //rect, angle, z, effect
+    PolyRender::init(screenWidth,screenHeight); //rect, angle, z, effect
 
     SDL_Event e;
     bool quit = false;
     glClearColor(1,1,1,1);
     bool eventsEmpty = true;
 
-    glm::vec2 a = {100,100};
-    glm::vec2 b = {200,200};
-    glm::vec2 c = {400,100};
-    glm::vec2 d = {100,500};
-
-    Sprite sprite("projects/transDiagonal.png");
-    Sprite block("projects/block.png");
-    Sprite fish ("projects/fish.png");
-    Sprite transFish ("projects/trans_fish.png");
-    Sprite diag ("projects/diagonal.png");
 
     int dimen = 1;
-    int instances = screenWidth*screenHeight/dimen/dimen;
 
-    Font alef("projects/alef.ttf");
-
-    float* data = new float[instances*7];
+    //Font alef("projects/alef.ttf");
+    //BaseAnimation anime("turtFrog.png",2,5,2, {0,.5,5,1});
+    Sprite bunny ("bunny.png");
+    //BaseAnimationComponent comp(entity,anime);
     //glDepthMask(GL_FALSE);
     //swarm.addBoid(fish);
     //glEnable(GL_DEPTH_TEST);
     //SDL_GL_SetSwapInterval(0);
-    glm::vec2 score = {0,0};
+
+    BasicRenderPipeline pipeline;
+
+    pipeline.init("./shader/gravityVertexShader.h","./shader/gravityFragmentShader.h",{2,1,4,4,1},{"./shader/geometryShader.h"},0);
+    RenderCamera camera;
+    camera.init(screenWidth,screenHeight);
+
+    ViewPort::currentCamera = &camera;
     while (!quit)
     {
         while (SDL_PollEvent(&e))
@@ -88,28 +80,29 @@ int main(int args, char* argsc[])
         }
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+
+        //pipeline.draw(GL_POINTS,glm::vec2(screenWidth/2,screenHeight/2),screenHeight,glm::vec4(1,1,0,1),glm::vec4(1,0,0,0),(SDL_GetTicks()));
+        //comp.request(ViewPort::animeProgram,{{0,0,64,64},0});
+
         //sprite.draw(RenderProgram::basicProgram,data,instances);
         //PolyRender::requestRect({1,0,64,64},{1,0,0,1},true,0,1);
-        //PolyRender::render();
                 //Font::tnr.requestWrite({convert(DeltaTime::deltaTime),{0,0,100,100},0,{0,0,0,1},1});
-        //SpriteManager::request(transFish,betterProgram,glm::vec4(200,300,100,100));
-        SpriteManager::request(sprite,betterProgram,{glm::vec4(200,200,100,100),1});
-        SpriteManager::request(block,betterProgram,{glm::vec4(200,200,100,100)});
-        SpriteManager::request(transFish,betterProgram,{glm::vec4(300,500,100,100)});
-        SpriteManager::request(diag,betterProgram,{glm::vec4(100,100,100,100)});
-
-        alef.requestWrite({"asdf",glm::vec4(100,100,100,100),0,1});
-
+        int dimen = 60;
+        for (int i = 0; i < 1; ++i)
+        {
+            SpriteManager::request(bunny,ViewPort::basicProgram,{{-10,10,-30,-30},(SDL_GetTicks()/100)%102});
+        }
+        //SpriteManager::request(anime,ViewPort::animeProgram,{glm::vec4(200,300,100,100),1},glm::vec2(5,2));
+        ViewPort::update();
+        PolyRender::render();
         SpriteManager::render();
 
-        SDL_GL_SwapWindow(window);
+        GLContext::update();
         DeltaTime::update();
         //
-
+        //std::cout << DeltaTime::deltaTime << "\n";
         eventsEmpty = true;
 
-
-        //std::cout << DeltaTime::deltaTime << "\n";
     }
     return 0;
 }
